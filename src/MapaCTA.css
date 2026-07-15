@@ -1,0 +1,51 @@
+.mapa-cta {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 3rem) clamp(1.5rem, 5vw, 3rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.9rem;
+  background: linear-gradient(160deg, #f7e7e3 0%, #fffaf4 100%);
+  border: 1px solid rgba(121, 80, 61, 0.14);
+  border-radius: 28px;
+  box-shadow: 0 18px 45px rgba(92, 58, 44, 0.1);
+}
+
+.mapa-cta__icone {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  color: #b95f48;
+  background: #fff;
+  border: 1px solid rgba(215, 122, 93, 0.3);
+  border-radius: 50%;
+}
+
+.mapa-cta__titulo {
+  font-family: Georgia, serif;
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
+  color: #54382f;
+  margin: 0;
+}
+
+.mapa-cta__texto {
+  margin: 0;
+  max-width: 46ch;
+  color: #765347;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.mapa-cta__botao {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 560px) {
+  .mapa-cta {
+    padding: 2rem 1.25rem;
+    border-radius: 22px;
+  }
+}

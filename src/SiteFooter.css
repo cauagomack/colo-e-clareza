@@ -1,0 +1,34 @@
+.site-footer {
+  border-top: 1px solid var(--linha);
+  padding: var(--espaco-lg) clamp(1.25rem, 5vw, 3.5rem);
+  text-align: center;
+  color: var(--marrom-muted);
+}
+
+.site-footer__frase {
+  font-family: var(--fonte-display);
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--marrom-soft);
+  margin-bottom: var(--espaco-sm);
+}
+
+.site-footer__linhas {
+  display: flex;
+  justify-content: center;
+  gap: var(--espaco-md);
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.site-footer__linhas a {
+  text-decoration: none;
+  color: var(--marrom-muted);
+  border-bottom: 1px solid var(--linha);
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.site-footer__linhas a:hover {
+  color: var(--terracota-dark);
+  border-color: var(--terracota-light);
+}

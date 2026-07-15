@@ -1,0 +1,81 @@
+/* --- Botões reutilizáveis --- */
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: none;
+  border-radius: var(--raio-pill);
+  font-family: var(--fonte-corpo);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 1.05rem 2rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  line-height: 1.2;
+}
+
+.botao--primario {
+  background: linear-gradient(135deg, var(--terracota) 0%, var(--terracota-dark) 100%);
+  color: var(--paper);
+  box-shadow: var(--sombra);
+}
+
+.botao--primario:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-forte);
+}
+
+.botao--secundario {
+  background: var(--paper);
+  color: var(--marrom);
+  border: 1.5px solid var(--linha);
+}
+
+.botao--secundario:hover {
+  border-color: var(--terracota);
+  color: var(--terracota-dark);
+  transform: translateY(-2px);
+}
+
+.botao--largo {
+  width: 100%;
+}
+
+.botao:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* --- Seções --- */
+.secao {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--espaco-xl) clamp(1.25rem, 5vw, 3.5rem);
+}
+
+.secao__cabecalho {
+  text-align: center;
+  max-width: 46ch;
+  margin: 0 auto var(--espaco-lg);
+}
+
+.secao__eyebrow {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--terracota);
+  margin-bottom: 0.9rem;
+}
+
+/* --- Divisor orgânico --- */
+.divisor {
+  display: block;
+  width: 100%;
+  height: 40px;
+  margin: 0 auto;
+}
