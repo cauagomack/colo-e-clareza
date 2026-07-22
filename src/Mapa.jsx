@@ -2,39 +2,47 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import {
+  ArrowRight,
+  CheckCircle2,
   Download,
+  FlipHorizontal,
   HelpCircle,
   Home,
   Minus,
   Pencil,
   Plus,
-  RotateCcw,
-  Search,
-  Send,
-  Trash2,
   Users,
   X,
 } from 'lucide-react';
-import SendForAnalysisModal from './SendForAnalysisModal.jsx';
 import './Mapa.css';
 
-const STORAGE_KEY = 'colo-clareza-mapa-sistemico-v1';
+// Chave de armazenamento do fluxo guiado + campo sistêmico.
+const STORAGE_KEY_V2 = 'colo-clareza-mapa-v2';
 
-const CATEGORY_LABELS = {
-  babies: 'Bebês',
-  children: 'Crianças',
-  teens: 'Adolescentes',
-  adults: 'Adultos',
-  symbols: 'Representantes simbólicos',
-};
+// TODO: defina aqui o valor real da análise antes de publicar.
+const ANALYSIS_PRICE_LABEL = 'R$ XX,XX';
 
-const CATEGORY_TABS = [
-  { id: 'babies', label: 'Bebês' },
-  { id: 'children', label: 'Crianças' },
-  { id: 'teens', label: 'Adolescentes' },
-  { id: 'adults', label: 'Adultos' },
-  { id: 'symbols', label: 'Simbólicos' },
+// As 5 perguntas do fluxo guiado. "role" é o texto curto usado na
+// confirmação e na etiqueta da bancada; "prompt" é a pergunta em destaque.
+const GUIDED_QUESTIONS = [
+  { role: 'você', prompt: 'Quem representa você?' },
+  { role: 'essa situação', prompt: 'Quem representa essa situação?' },
+  {
+    role: 'a pessoa mais diretamente ligada a essa situação',
+    prompt: 'Quem está mais diretamente ligado a essa situação?',
+  },
+  {
+    role: 'quem também é afetado por essa situação',
+    prompt: 'Quem também é afetado por essa situação?',
+  },
+  {
+    role: 'essa trajetória familiar semelhante',
+    prompt:
+      'Existe alguém da sua história familiar cuja trajetória lhe lembre, de alguma forma, essa situação?',
+  },
 ];
+
+const CATEGORY_TABS_ORDER = ['babies', 'children', 'teens', 'adults', 'symbols'];
 
 const BASE_CHARACTERS = [
   {
@@ -353,6 +361,29 @@ const BASE_CHARACTERS = [
   },
 ];
 
+// Bancada única com todos os personagens misturados (intercala as
+// categorias em vez de agrupá-las) — usada nas 5 perguntas do fluxo guiado.
+// As categorias continuam existindo nos dados, só não aparecem na tela.
+const MIXED_BENCH = (() => {
+  const byCategory = CATEGORY_TABS_ORDER.map((categoryId) =>
+    BASE_CHARACTERS.filter((character) => character.category === categoryId),
+  );
+  const maxLength = Math.max(...byCategory.map((list) => list.length));
+  const mixed = [];
+
+  for (let index = 0; index < maxLength; index += 1) {
+    byCategory.forEach((list) => {
+      if (list[index]) mixed.push(list[index]);
+    });
+  }
+
+  return mixed;
+})();
+
+function clampPercent(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function CharacterAvatar({ character, compact = false }) {
   const size = compact ? 62 : 86;
 
@@ -460,86 +491,185 @@ function CharacterAvatar({ character, compact = false }) {
   );
 }
 
-function CharacterCard({ character, onAdd }) {
-  const handleDragStart = (event) => {
-    event.dataTransfer.setData('application/x-systemic-character', character.id);
-    event.dataTransfer.effectAllowed = 'copy';
-  };
-
+// Tela inicial: "O que você deseja olhar hoje?"
+function ThemeScreen({ theme, onChangeTheme, onContinue }) {
   return (
-    <button
-      type="button"
-      className="library-character"
-      draggable
-      onDragStart={handleDragStart}
-      onClick={() => onAdd(character.id)}
-      title="Clique ou arraste para adicionar ao mapa"
-    >
-      <CharacterAvatar character={character} compact />
-      <span>{character.label}</span>
-    </button>
+    <div className="guided-screen guided-screen--tema">
+      <div className="guided-card">
+        <h1>O que você deseja olhar hoje?</h1>
+        <p className="guided-card__subtitulo">
+          Escreva, com suas palavras, a situação ou o momento que você quer entender melhor.
+        </p>
+        <textarea
+          className="guided-tema-input"
+          rows={5}
+          value={theme}
+          onChange={(event) => onChangeTheme(event.target.value)}
+          placeholder="Descreva livremente o que está vivendo..."
+        />
+        <button
+          type="button"
+          className="botao botao--primario guided-continuar"
+          onClick={onContinue}
+          disabled={!theme.trim()}
+        >
+          Continuar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Tela de cada uma das 5 perguntas: bancada única + confirmação.
+function GuidedQuestionScreen({
+  questionIndex,
+  totalQuestions,
+  prompt,
+  role,
+  benchCharacters,
+  pendingCharacter,
+  onSelectCharacter,
+  onConfirm,
+  onCancelPending,
+}) {
+  return (
+    <div className="guided-screen">
+      <span className="guided-progresso">
+        Pergunta {questionIndex + 1} de {totalQuestions}
+      </span>
+      <h1 className="guided-pergunta">{prompt}</h1>
+      <p className="guided-instrucao">Toque em um personagem para escolhê-lo.</p>
+
+      <div className="guided-bancada">
+        {benchCharacters.map((character) => (
+          <button
+            type="button"
+            key={character.id}
+            className="guided-bancada__item"
+            onClick={() => onSelectCharacter(character.id)}
+          >
+            <CharacterAvatar character={character} compact />
+            <span>{character.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {pendingCharacter && (
+        <div className="guided-confirmacao-fundo" role="dialog" aria-modal="true">
+          <div className="guided-confirmacao">
+            <CharacterAvatar character={pendingCharacter} />
+            <p>
+              Você escolheu este personagem para representar <strong>{role}</strong>.
+              <br />
+              É realmente este personagem que deseja escolher?
+            </p>
+            <div className="guided-confirmacao__botoes">
+              <button type="button" className="botao botao--primario" onClick={onConfirm}>
+                Sim, confirmar escolha
+              </button>
+              <button type="button" className="guided-confirmacao__voltar" onClick={onCancelPending}>
+                Voltar e continuar observando
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
 export default function Mapa() {
   const mapRef = useRef(null);
-  const dragMetaRef = useRef(null);
 
-  const [activeCategory, setActiveCategory] = useState('babies');
-  const [search, setSearch] = useState('');
+  // --- Fluxo guiado ---
+  const [theme, setTheme] = useState('');
+  const [flowStage, setFlowStage] = useState('tema'); // 'tema' | 'perguntas' | 'campo'
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [pendingCharacterId, setPendingCharacterId] = useState(null);
+
+  // --- Campo sistêmico ---
   const [zoom, setZoom] = useState(1);
-  const [selectedId, setSelectedId] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [customName, setCustomName] = useState('');
   const [isExporting, setIsExporting] = useState(false);
-  const [sendModalOpen, setSendModalOpen] = useState(false);
 
-  const [customCharacters, setCustomCharacters] = useState([]);
-  const [placedCharacters, setPlacedCharacters] = useState([]);
+  // Os 5 representantes escolhidos. Cada um: { instanceId, characterId,
+  // role, name, x, y, facing, inField }. inField=false enquanto ainda
+  // está na bancada, esperando ser arrastado para dentro do círculo.
+  const [fieldCharacters, setFieldCharacters] = useState([]);
+  const [selectedFieldId, setSelectedFieldId] = useState(null);
+  const [benchDrag, setBenchDrag] = useState(null); // { instanceId, startX, startY, currentX, currentY }
+  const fieldDragMetaRef = useRef(null);
 
+  // --- Conclusão ---
+  const [mapCompleted, setMapCompleted] = useState(false);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [showPaymentNotice, setShowPaymentNotice] = useState(false);
+
+  // Carrega tudo da chave v2.
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved?.placedCharacters) setPlacedCharacters(saved.placedCharacters);
-      if (saved?.customCharacters) setCustomCharacters(saved.customCharacters);
-      if (saved?.zoom) setZoom(saved.zoom);
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_V2));
+      if (saved) {
+        if (typeof saved.theme === 'string') setTheme(saved.theme);
+        if (saved.flowStage) setFlowStage(saved.flowStage);
+        if (typeof saved.questionIndex === 'number') setQuestionIndex(saved.questionIndex);
+        if (Array.isArray(saved.answers)) setAnswers(saved.answers);
+        if (Array.isArray(saved.fieldCharacters)) setFieldCharacters(saved.fieldCharacters);
+        if (typeof saved.zoom === 'number') setZoom(saved.zoom);
+        if (typeof saved.mapCompleted === 'boolean') setMapCompleted(saved.mapCompleted);
+      }
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY_V2);
     }
   }, []);
 
+  // Salva tudo junto sempre que qualquer parte do estado muda.
   useEffect(() => {
     localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ placedCharacters, customCharacters, zoom }),
+      STORAGE_KEY_V2,
+      JSON.stringify({
+        theme,
+        flowStage,
+        questionIndex,
+        answers,
+        fieldCharacters,
+        zoom,
+        mapCompleted,
+      }),
     );
-  }, [placedCharacters, customCharacters, zoom]);
-
-  const allCharacters = useMemo(
-    () => [...BASE_CHARACTERS, ...customCharacters],
-    [customCharacters],
-  );
+  }, [theme, flowStage, questionIndex, answers, fieldCharacters, zoom, mapCompleted]);
 
   const charactersById = useMemo(
-    () => new Map(allCharacters.map((character) => [character.id, character])),
-    [allCharacters],
+    () => new Map(BASE_CHARACTERS.map((character) => [character.id, character])),
+    [],
   );
 
-  const visibleCharacters = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
+  // Assim que as 5 perguntas terminam, inicializa os 5 representantes na
+  // bancada (uma única vez — se já existir progresso salvo, não mexe).
+  useEffect(() => {
+    if (
+      flowStage === 'campo' &&
+      fieldCharacters.length === 0 &&
+      answers.length === GUIDED_QUESTIONS.length
+    ) {
+      setFieldCharacters(
+        answers.map((answer) => ({
+          instanceId: answer.instanceId,
+          characterId: answer.characterId,
+          role: answer.role,
+          name: answer.name,
+          x: 50,
+          y: 50,
+          facing: 'right',
+          inField: false,
+        })),
+      );
+    }
+  }, [flowStage, answers, fieldCharacters.length]);
 
-    return allCharacters.filter((character) => {
-      const categoryMatches = character.category === activeCategory;
-      const searchMatches =
-        !normalizedSearch ||
-        character.label.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
-
-      return categoryMatches && searchMatches;
-    });
-  }, [allCharacters, activeCategory, search]);
-
-  const selectedCharacter = placedCharacters.find(
-    (character) => character.instanceId === selectedId,
+  const selectedFieldCharacter = fieldCharacters.find(
+    (character) => character.instanceId === selectedFieldId,
   );
 
   const screenPointToCanvas = (clientX, clientY) => {
@@ -553,160 +683,166 @@ export default function Mapa() {
     };
   };
 
-  const addCharacter = (characterId, x = null, y = null) => {
-    const character = charactersById.get(characterId);
+  const isPointInsideCircle = (clientX, clientY) => {
+    if (!mapRef.current) return false;
+    const rect = mapRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const radius = rect.width / 2;
+    const deltaX = clientX - centerX;
+    const deltaY = clientY - centerY;
+    return Math.sqrt(deltaX * deltaX + deltaY * deltaY) <= radius;
+  };
+
+  // --- Handlers do fluxo guiado (perguntas) ---
+  const handleSelectBenchCharacter = (characterId) => {
+    setPendingCharacterId(characterId);
+  };
+
+  const handleCancelPending = () => {
+    setPendingCharacterId(null);
+  };
+
+  const handleConfirmPending = () => {
+    const character = charactersById.get(pendingCharacterId);
     if (!character) return;
 
-    const spread = placedCharacters.length % 7;
-    const defaultX = 50 + ((spread % 3) - 1) * 10;
-    const defaultY = 50 + (Math.floor(spread / 3) - 1) * 10;
-
-    const newCharacter = {
-      instanceId: `${character.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    const currentQuestion = GUIDED_QUESTIONS[questionIndex];
+    const newAnswer = {
+      role: currentQuestion.role,
+      prompt: currentQuestion.prompt,
       characterId: character.id,
+      // instanceId próprio: o mesmo personagem pode ser escolhido de novo
+      // em outra pergunta e vira uma instância independente.
+      instanceId: `${character.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       name: character.label,
-      x: Math.max(6, Math.min(94, x ?? defaultX)),
-      y: Math.max(7, Math.min(93, y ?? defaultY)),
     };
 
-    setPlacedCharacters((current) => [...current, newCharacter]);
-    setSelectedId(newCharacter.instanceId);
+    setAnswers((current) => [...current, newAnswer]);
+    setPendingCharacterId(null);
+
+    if (questionIndex + 1 < GUIDED_QUESTIONS.length) {
+      setQuestionIndex((current) => current + 1);
+    } else {
+      setFlowStage('campo');
+    }
   };
 
-  const handleMapDrop = (event) => {
+  // --- Handlers da bancada -> campo (arrastar para dentro do círculo) ---
+  const handleBenchPointerDown = (event, item) => {
+    if (mapCompleted) return;
     event.preventDefault();
-    const characterId = event.dataTransfer.getData(
-      'application/x-systemic-character',
-    );
-    if (!characterId) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setBenchDrag({
+      instanceId: item.instanceId,
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+    });
+  };
 
-    const point = screenPointToCanvas(event.clientX, event.clientY);
-    addCharacter(
-      characterId,
-      (point.x / point.width) * 100,
-      (point.y / point.height) * 100,
+  const handleBenchPointerMove = (event) => {
+    setBenchDrag((current) =>
+      current ? { ...current, currentX: event.clientX, currentY: event.clientY } : current,
     );
   };
 
-  const handlePlacedPointerDown = (event, placedCharacter) => {
+  const handleBenchPointerUp = (event, item) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (isPointInsideCircle(event.clientX, event.clientY)) {
+      const point = screenPointToCanvas(event.clientX, event.clientY);
+      const xPercent = clampPercent((point.x / point.width) * 100, 6, 94);
+      const yPercent = clampPercent((point.y / point.height) * 100, 7, 93);
+
+      setFieldCharacters((current) =>
+        current.map((character) =>
+          character.instanceId === item.instanceId
+            ? { ...character, inField: true, x: xPercent, y: yPercent }
+            : character,
+        ),
+      );
+      setSelectedFieldId(item.instanceId);
+    }
+
+    setBenchDrag(null);
+  };
+
+  // --- Handlers de reposicionamento dentro do campo ---
+  const handleFieldPointerDown = (event, character) => {
+    if (mapCompleted) return;
     event.preventDefault();
     event.stopPropagation();
 
     const point = screenPointToCanvas(event.clientX, event.clientY);
-    const currentX = (placedCharacter.x / 100) * point.width;
-    const currentY = (placedCharacter.y / 100) * point.height;
+    const currentX = (character.x / 100) * point.width;
+    const currentY = (character.y / 100) * point.height;
 
-    dragMetaRef.current = {
-      instanceId: placedCharacter.instanceId,
+    fieldDragMetaRef.current = {
+      instanceId: character.instanceId,
       offsetX: point.x - currentX,
       offsetY: point.y - currentY,
     };
 
     event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedId(placedCharacter.instanceId);
+    setSelectedFieldId(character.instanceId);
   };
 
-  const handlePlacedPointerMove = (event) => {
-    const dragMeta = dragMetaRef.current;
-    if (!dragMeta) return;
+  const handleFieldPointerMove = (event) => {
+    const drag = fieldDragMetaRef.current;
+    if (!drag) return;
 
     const point = screenPointToCanvas(event.clientX, event.clientY);
-    const nextX =
-      ((point.x - dragMeta.offsetX) / point.width) * 100;
-    const nextY =
-      ((point.y - dragMeta.offsetY) / point.height) * 100;
+    const nextX = ((point.x - drag.offsetX) / point.width) * 100;
+    const nextY = ((point.y - drag.offsetY) / point.height) * 100;
 
-    setPlacedCharacters((current) =>
+    setFieldCharacters((current) =>
       current.map((character) =>
-        character.instanceId === dragMeta.instanceId
+        character.instanceId === drag.instanceId
           ? {
               ...character,
-              x: Math.max(5, Math.min(95, nextX)),
-              y: Math.max(6, Math.min(94, nextY)),
+              x: clampPercent(nextX, 5, 95),
+              y: clampPercent(nextY, 6, 94),
             }
           : character,
       ),
     );
   };
 
-  const handlePlacedPointerUp = (event) => {
-    dragMetaRef.current = null;
+  const handleFieldPointerUp = (event) => {
+    fieldDragMetaRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
 
-  const updateSelectedName = (name) => {
-    setPlacedCharacters((current) =>
+  const updateFieldName = (name) => {
+    setFieldCharacters((current) =>
       current.map((character) =>
-        character.instanceId === selectedId
-          ? { ...character, name }
+        character.instanceId === selectedFieldId ? { ...character, name } : character,
+      ),
+    );
+  };
+
+  const toggleFieldFacing = () => {
+    setFieldCharacters((current) =>
+      current.map((character) =>
+        character.instanceId === selectedFieldId
+          ? { ...character, facing: character.facing === 'left' ? 'right' : 'left' }
           : character,
       ),
     );
   };
 
-  const deleteSelected = () => {
-    if (!selectedId) return;
-    setPlacedCharacters((current) =>
-      current.filter((character) => character.instanceId !== selectedId),
-    );
-    setSelectedId(null);
-  };
-
-  const clearMap = () => {
-    if (
-      placedCharacters.length > 0 &&
-      !window.confirm('Deseja remover todos os personagens do mapa?')
-    ) {
-      return;
-    }
-    setPlacedCharacters([]);
-    setSelectedId(null);
-  };
-
-  const restartMap = () => {
-    if (
-      !window.confirm(
-        'Deseja reiniciar o mapa e apagar também os representantes personalizados?',
-      )
-    ) {
-      return;
-    }
-
-    setPlacedCharacters([]);
-    setCustomCharacters([]);
-    setSelectedId(null);
-    setSearch('');
-    setActiveCategory('babies');
-    setZoom(1);
-    localStorage.removeItem(STORAGE_KEY);
-  };
-
-  const addCustomSymbol = () => {
-    const cleanName = customName.trim();
-    if (!cleanName) return;
-
-    const customCharacter = {
-      id: `custom-symbol-${Date.now()}`,
-      label: cleanName,
-      category: 'symbols',
-      kind: 'symbol',
-      symbol: '✦',
-      symbolColor: '#a85f4c',
-      background: '#f3dfd6',
-    };
-
-    setCustomCharacters((current) => [...current, customCharacter]);
-    setCustomName('');
-    setActiveCategory('symbols');
-  };
-
+  // --- Exportação (inalterada em relação ao que já funcionava) ---
   const exportMap = async (filename) => {
     if (!mapRef.current) return;
 
     try {
-      setSelectedId(null);
+      setSelectedFieldId(null);
       setIsExporting(true);
       await new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
@@ -728,30 +864,50 @@ export default function Mapa() {
     }
   };
 
-  // Gera a mesma captura em PNG usada no download, mas devolve o data URL
-  // em vez de disparar o download — usado pelo modal de envio para análise.
-  const captureMapImageDataUrl = async () => {
-    if (!mapRef.current) return null;
-
-    try {
-      setSelectedId(null);
-      setIsExporting(true);
-      await new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      );
-
-      const canvas = await html2canvas(mapRef.current, {
-        backgroundColor: '#fffaf4',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-
-      return canvas.toDataURL('image/png');
-    } finally {
-      setIsExporting(false);
-    }
+  // --- Conclusão ---
+  const handleConfirmComplete = () => {
+    setMapCompleted(true);
+    setShowCompleteConfirm(false);
+    setSelectedFieldId(null);
   };
+
+  // --- Etapa 1: telas do fluxo guiado, antes do círculo ---
+
+  if (flowStage === 'tema') {
+    return (
+      <ThemeScreen
+        theme={theme}
+        onChangeTheme={setTheme}
+        onContinue={() => setFlowStage('perguntas')}
+      />
+    );
+  }
+
+  if (flowStage === 'perguntas') {
+    const currentQuestion = GUIDED_QUESTIONS[questionIndex];
+    const pendingCharacter = pendingCharacterId
+      ? charactersById.get(pendingCharacterId)
+      : null;
+
+    return (
+      <GuidedQuestionScreen
+        questionIndex={questionIndex}
+        totalQuestions={GUIDED_QUESTIONS.length}
+        prompt={currentQuestion.prompt}
+        role={currentQuestion.role}
+        benchCharacters={MIXED_BENCH}
+        pendingCharacter={pendingCharacter}
+        onSelectCharacter={handleSelectBenchCharacter}
+        onConfirm={handleConfirmPending}
+        onCancelPending={handleCancelPending}
+      />
+    );
+  }
+
+  // --- flowStage === 'campo': campo sistêmico restrito (Etapa 2) ---
+
+  const bench = fieldCharacters.filter((character) => !character.inField);
+  const placedInField = fieldCharacters.filter((character) => character.inField);
 
   return (
     <div className="systemic-page">
@@ -767,13 +923,7 @@ export default function Mapa() {
 
         <button type="button" className="systemic-nav-item active">
           <Users size={22} />
-          <span>Biblioteca</span>
-        </button>
-
-        <button type="button" className="systemic-nav-item disabled">
-          <Pencil size={21} />
-          <span>Anotações</span>
-          <small>Em breve</small>
+          <span>Campo</span>
         </button>
       </aside>
 
@@ -803,114 +953,23 @@ export default function Mapa() {
           </button>
         </header>
 
-        <div className="systemic-layout">
-          <section className="library-panel" aria-label="Biblioteca de personagens">
-            <div className="panel-title-row">
-              <h1>Biblioteca de Personagens</h1>
-              <span aria-hidden="true">♡</span>
-            </div>
-
-            <label className="library-search">
-              <Search size={18} />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar personagem..."
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  aria-label="Limpar busca"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </label>
-
-            <div className="category-tabs" role="tablist">
-              {CATEGORY_TABS.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  className={activeCategory === category.id ? 'active' : ''}
-                  onClick={() => setActiveCategory(category.id)}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="library-category-heading">
-              <h2>{CATEGORY_LABELS[activeCategory]}</h2>
-              <small>Clique ou arraste</small>
-            </div>
-
-            <div className="character-grid">
-              {visibleCharacters.map((character) => (
-                <CharacterCard
-                  key={character.id}
-                  character={character}
-                  onAdd={addCharacter}
-                />
-              ))}
-
-              {visibleCharacters.length === 0 && (
-                <p className="empty-library">
-                  Nenhum personagem encontrado nesta categoria.
-                </p>
-              )}
-            </div>
-
-            {activeCategory === 'symbols' && (
-              <div className="custom-symbol-box">
-                <label htmlFor="custom-symbol-name">
-                  Adicionar representante simbólico
-                </label>
-                <div>
-                  <input
-                    id="custom-symbol-name"
-                    value={customName}
-                    onChange={(event) => setCustomName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') addCustomSymbol();
-                    }}
-                    placeholder="Ex.: escola, distância..."
-                  />
-                  <button
-                    type="button"
-                    onClick={addCustomSymbol}
-                    aria-label="Adicionar representante"
-                  >
-                    <Plus size={19} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <p className="library-quote">
-              Aquilo que não é visto continua buscando um lugar para existir.
-              <span>♥</span>
-            </p>
-          </section>
-
+        <div className="systemic-layout systemic-layout--campo">
           <section className="map-column">
             <div className="map-instruction">
               <Users size={22} />
               <div>
-                <strong>Espaço Sistêmico</strong>
-                <span>Arraste os personagens para posicioná-los no mapa</span>
+                <strong>Campo Sistêmico</strong>
+                <span>Arraste os representantes da bancada para posicioná-los no campo</span>
               </div>
             </div>
 
             <div
               ref={mapRef}
               className={`systemic-map ${isExporting ? 'is-exporting' : ''}`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={handleMapDrop}
               onPointerDown={(event) => {
-                if (event.target === event.currentTarget) setSelectedId(null);
+                if (event.target === event.currentTarget && !mapCompleted) {
+                  setSelectedFieldId(null);
+                }
               }}
               style={{ '--map-zoom': zoom }}
             >
@@ -920,66 +979,93 @@ export default function Mapa() {
               <div className="map-sacred-lines" />
 
               <div className="systemic-canvas">
-                {placedCharacters.map((placedCharacter) => {
-                  const character = charactersById.get(
-                    placedCharacter.characterId,
-                  );
+                {placedInField.map((placedCharacter) => {
+                  const character = charactersById.get(placedCharacter.characterId);
                   if (!character) return null;
 
                   return (
                     <button
                       key={placedCharacter.instanceId}
                       type="button"
-                      className={`placed-character ${
-                        selectedId === placedCharacter.instanceId
-                          ? 'selected'
-                          : ''
-                      }`}
+                      className={`placed-character field-character ${
+                        placedCharacter.facing === 'left' ? 'facing-left' : ''
+                      } ${selectedFieldId === placedCharacter.instanceId ? 'selected' : ''}`}
                       style={{
                         left: `${placedCharacter.x}%`,
                         top: `${placedCharacter.y}%`,
                       }}
-                      onPointerDown={(event) =>
-                        handlePlacedPointerDown(event, placedCharacter)
-                      }
-                      onPointerMove={handlePlacedPointerMove}
-                      onPointerUp={handlePlacedPointerUp}
-                      onPointerCancel={handlePlacedPointerUp}
-                      onDoubleClick={() =>
-                        setSelectedId(placedCharacter.instanceId)
-                      }
-                      aria-label={`${placedCharacter.name}. Arraste para mover.`}
+                      disabled={mapCompleted}
+                      onPointerDown={(event) => handleFieldPointerDown(event, placedCharacter)}
+                      onPointerMove={handleFieldPointerMove}
+                      onPointerUp={handleFieldPointerUp}
+                      onPointerCancel={handleFieldPointerUp}
+                      aria-label={`${placedCharacter.name} (${placedCharacter.role}). Arraste para mover.`}
                     >
                       <CharacterAvatar character={character} />
-                      <span className="placed-character-name">
-                        {placedCharacter.name}
-                      </span>
+                      <span className="placed-character-name">{placedCharacter.name}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {placedCharacters.length === 0 && (
+              {placedInField.length === 0 && (
                 <div className="empty-map-message">
                   <Users size={28} />
-                  <strong>Seu mapa está vazio</strong>
-                  <span>
-                    Clique em um personagem ou arraste-o da biblioteca.
-                  </span>
+                  <strong>Seu campo está vazio</strong>
+                  <span>Arraste os representantes da bancada abaixo para começar.</span>
                 </div>
               )}
             </div>
 
+            {!mapCompleted && bench.length > 0 && (
+              <div className="field-bench" aria-label="Representantes para posicionar">
+                {bench.map((character) => {
+                  const isDragging = benchDrag?.instanceId === character.instanceId;
+                  const style = isDragging
+                    ? {
+                        transform: `translate(${benchDrag.currentX - benchDrag.startX}px, ${
+                          benchDrag.currentY - benchDrag.startY
+                        }px)`,
+                        position: 'relative',
+                        zIndex: 30,
+                      }
+                    : undefined;
+
+                  return (
+                    <button
+                      key={character.instanceId}
+                      type="button"
+                      className="field-bench__item"
+                      style={style}
+                      onPointerDown={(event) => handleBenchPointerDown(event, character)}
+                      onPointerMove={handleBenchPointerMove}
+                      onPointerUp={(event) => handleBenchPointerUp(event, character)}
+                      onPointerCancel={() => setBenchDrag(null)}
+                    >
+                      <CharacterAvatar
+                        character={charactersById.get(character.characterId)}
+                        compact
+                      />
+                      <span className="field-bench__nome">{character.name}</span>
+                      <span className="field-bench__papel">{character.role}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="map-bottom-bar">
-              <p>Arraste os personagens e posicione onde desejar</p>
+              <p>
+                {mapCompleted
+                  ? 'Seu mapa está concluído.'
+                  : 'Arraste os representantes e posicione onde desejar'}
+              </p>
 
               <div className="zoom-controls" aria-label="Controles de zoom">
                 <button
                   type="button"
                   onClick={() =>
-                    setZoom((current) =>
-                      Math.max(0.75, Number((current - 0.1).toFixed(2))),
-                    )
+                    setZoom((current) => Math.max(0.75, Number((current - 0.1).toFixed(2))))
                   }
                   aria-label="Diminuir zoom"
                 >
@@ -989,9 +1075,7 @@ export default function Mapa() {
                 <button
                   type="button"
                   onClick={() =>
-                    setZoom((current) =>
-                      Math.min(1.35, Number((current + 0.1).toFixed(2))),
-                    )
+                    setZoom((current) => Math.min(1.35, Number((current + 0.1).toFixed(2))))
                   }
                   aria-label="Aumentar zoom"
                 >
@@ -1002,107 +1086,119 @@ export default function Mapa() {
           </section>
 
           <aside className="actions-panel">
-            <div className="action-buttons">
-              <button type="button" className="action-button danger" onClick={clearMap}>
-                <Trash2 size={23} />
-                <span>Limpar mapa</span>
-              </button>
+            {!mapCompleted && (
+              <div className="action-buttons action-buttons--campo">
+                <button
+                  type="button"
+                  className="action-button green"
+                  onClick={() => exportMap('mapa-sistemico.png')}
+                >
+                  <Download size={23} />
+                  <span>Salvar imagem</span>
+                </button>
 
-              <button
-                type="button"
-                className="action-button green"
-                onClick={() => exportMap('mapa-sistemico.png')}
-              >
-                <Download size={23} />
-                <span>Salvar imagem</span>
-              </button>
+                <button
+                  type="button"
+                  className="action-button sand"
+                  onClick={() => exportMap('mapa-sistemico-exportado.png')}
+                >
+                  <Download size={23} />
+                  <span>Exportar mapa</span>
+                </button>
 
-              <button
-                type="button"
-                className="action-button sand"
-                onClick={() => exportMap('mapa-sistemico-exportado.png')}
-              >
-                <Download size={23} />
-                <span>Exportar mapa</span>
-              </button>
+                <button
+                  type="button"
+                  className="action-button primary"
+                  onClick={() => setShowCompleteConfirm(true)}
+                >
+                  <CheckCircle2 size={23} />
+                  <span>Concluir meu mapa</span>
+                </button>
+              </div>
+            )}
 
-              <button type="button" className="action-button lilac" onClick={restartMap}>
-                <RotateCcw size={23} />
-                <span>Reiniciar mapa</span>
-              </button>
-
-              <button
-                type="button"
-                className="action-button primary"
-                onClick={() => setSendModalOpen(true)}
-              >
-                <Send size={23} />
-                <span>Enviar para análise</span>
-              </button>
-            </div>
-
-            {selectedCharacter ? (
+            {!mapCompleted && selectedFieldCharacter && (
               <section className="selected-editor">
                 <div className="selected-editor-title">
-                  <strong>Personagem selecionado</strong>
+                  <strong>Representante selecionado</strong>
                   <button
                     type="button"
-                    onClick={() => setSelectedId(null)}
+                    onClick={() => setSelectedFieldId(null)}
                     aria-label="Fechar edição"
                   >
                     <X size={17} />
                   </button>
                 </div>
 
-                <label htmlFor="selected-character-name">Nome no mapa</label>
+                <label htmlFor="selected-field-name">Nome no mapa</label>
                 <div className="name-editor">
                   <Pencil size={17} />
                   <input
-                    id="selected-character-name"
-                    value={selectedCharacter.name}
-                    onChange={(event) =>
-                      updateSelectedName(event.target.value)
-                    }
+                    id="selected-field-name"
+                    value={selectedFieldCharacter.name}
+                    onChange={(event) => updateFieldName(event.target.value)}
                   />
                 </div>
 
-                <button
-                  type="button"
-                  className="delete-selected"
-                  onClick={deleteSelected}
-                >
-                  <Trash2 size={17} />
-                  Excluir personagem
+                <button type="button" className="flip-selected" onClick={toggleFieldFacing}>
+                  <FlipHorizontal size={17} />
+                  Virar para {selectedFieldCharacter.facing === 'left' ? 'a direita' : 'a esquerda'}
                 </button>
               </section>
-            ) : (
+            )}
+
+            {!mapCompleted && !selectedFieldCharacter && (
               <div className="map-tip">
                 <span>♥</span>
-                <p>
-                  Você pode mover, reposicionar e excluir personagens no mapa.
-                </p>
-                <p>
-                  Selecione um personagem para editar o nome ou removê-lo.
-                </p>
+                <p>Você pode arrastar, virar e renomear os representantes no campo.</p>
+                <p>Selecione um representante para editar o nome ou espelhá-lo.</p>
               </div>
+            )}
+
+            {mapCompleted && (
+              <section className="completion-card">
+                <h2>Seu mapa está pronto.</h2>
+                <p>Você construiu uma representação da forma como percebe essa situação hoje.</p>
+                <p>
+                  A partir dele será realizada uma análise sistêmica individual, observando a
+                  posição dos personagens, as relações construídas e os movimentos presentes no
+                  campo.
+                </p>
+                <p>
+                  Você receberá sua devolutiva em até 24 horas pelo WhatsApp ou e-mail informado.
+                </p>
+                <p className="completion-card__preco">
+                  Valor da análise: {ANALYSIS_PRICE_LABEL}
+                </p>
+                <button
+                  type="button"
+                  className="botao botao--primario"
+                  onClick={() => setShowPaymentNotice(true)}
+                >
+                  Solicitar análise
+                  <ArrowRight size={17} strokeWidth={2} />
+                </button>
+                {showPaymentNotice && (
+                  <p className="completion-card__aviso">
+                    O pagamento e o envio para análise serão habilitados na próxima etapa desta
+                    implementação.
+                  </p>
+                )}
+              </section>
             )}
 
             {showHelp && (
               <div className="help-card">
-                <button
-                  type="button"
-                  onClick={() => setShowHelp(false)}
-                  aria-label="Fechar ajuda"
-                >
+                <button type="button" onClick={() => setShowHelp(false)} aria-label="Fechar ajuda">
                   <X size={17} />
                 </button>
                 <strong>Como usar</strong>
                 <ol>
-                  <li>Escolha uma categoria.</li>
-                  <li>Clique ou arraste um personagem.</li>
-                  <li>Arraste dentro do círculo para mover.</li>
-                  <li>Selecione para renomear ou excluir.</li>
-                  <li>Baixe o resultado como imagem PNG.</li>
+                  <li>Arraste um representante da bancada para dentro do círculo.</li>
+                  <li>Arraste dentro do campo para reposicionar.</li>
+                  <li>Selecione para renomear ou virar (espelhar).</li>
+                  <li>Quando terminar, clique em "Concluir meu mapa".</li>
+                  <li>Depois de concluído, o mapa não pode mais ser alterado.</li>
                 </ol>
               </div>
             )}
@@ -1110,11 +1206,28 @@ export default function Mapa() {
         </div>
       </main>
 
-      <SendForAnalysisModal
-        open={sendModalOpen}
-        onClose={() => setSendModalOpen(false)}
-        onCaptureImage={captureMapImageDataUrl}
-      />
+      {showCompleteConfirm && (
+        <div className="guided-confirmacao-fundo" role="dialog" aria-modal="true">
+          <div className="guided-confirmacao">
+            <p>
+              Depois da confirmação, não será mais possível alterar personagens, nomes, posições
+              ou direções.
+            </p>
+            <div className="guided-confirmacao__botoes">
+              <button type="button" className="botao botao--primario" onClick={handleConfirmComplete}>
+                Sim, concluir meu mapa
+              </button>
+              <button
+                type="button"
+                className="guided-confirmacao__voltar"
+                onClick={() => setShowCompleteConfirm(false)}
+              >
+                Ainda quero revisar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
