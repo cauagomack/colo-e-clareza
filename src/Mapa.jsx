@@ -1,3 +1,4 @@
+import './Mapa.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import html2canvas from 'html2canvas';
