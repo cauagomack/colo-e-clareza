@@ -63,3 +63,24 @@ export function logoutAdmin() {
     ADMIN_TOKEN_KEY,
   );
 }
+export async function getAdminSubmissions() {
+    const token = getAdminToken();
+  
+    if (!token) {
+      throw new Error(
+        'Sua sessão expirou. Entre novamente.',
+      );
+    }
+  
+    const response = await fetch(
+      '/api/admin-submissions',
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+  
+    return readResponse(response);
+  }
