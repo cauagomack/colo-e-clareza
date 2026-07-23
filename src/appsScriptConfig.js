@@ -9,10 +9,7 @@
 // ============================================================================
 
 export const APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbyuQakP-Db6E8Dun7jgA0kpCC5U2wD-OzBWsek826TdWV56FcX_9Frhv_xcwYnjZtRx5w/exec';
+  'https://script.google.com/macros/s/AKfycbzAD7QOzkWPdWZ_Vs9BnG6zls3vfrE3e0fo3TjBlAdBY7nL4agH84eVflPgjKZGsYPVAg/exec';
 
-// Limite de tamanho da imagem (em base64) aceito no envio.
 export const MAX_IMAGE_SIZE_MB = 4;
-
-// Intervalo mínimo (em segundos) entre dois envios feitos deste mesmo navegador.
 export const MIN_SECONDS_BETWEEN_SUBMISSIONS = 30;

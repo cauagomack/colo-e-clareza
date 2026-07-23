@@ -16,10 +16,11 @@ import {
 } from 'lucide-react';
 import SendForAnalysisModal from './SendForAnalysisModal.jsx';
 import {
-  clearCheckoutContext,
-  resumeAnalysisPayment,
-  startAnalysisPayment,
-  verifyReturnedPayment,
+  checkAnalysisPayment,
+  clearCheckoutStorage,
+  getInfinitePayReturnData,
+  openAnalysisCheckout,
+  removePaymentParameters,
 } from './paymentApi.js';
 import './Mapa.css';
 // Chave de armazenamento do fluxo guiado + campo sistêmico.
@@ -555,7 +556,8 @@ function GuidedQuestionScreen({
  );
 }
 export default function Mapa() {
- const mapRef = useRef(null);
+  const mapRef = useRef(null);
+  const paymentReturnHandledRef = useRef(false);
  // --- Fluxo guiado ---
  const [theme, setTheme] = useState('');
  const [flowStage, setFlowStage] = useState('tema'); // 'tema' | 'perguntas' | 'campo'
@@ -619,49 +621,61 @@ const [analysisSubmitted, setAnalysisSubmitted] = useState(false);
  }, [theme, flowStage, questionIndex, answers, fieldCharacters, zoom, mapCompleted, analysisSubmitted]);
 
 // Confirma o retorno do Mercado Pago no backend antes de liberar o formulário.
+// Confirma o pagamento retornado pela InfinitePay.
 useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const paymentFlow = params.get('payment');
-  const paymentId = params.get('payment_id') || params.get('collection_id');
+  const paymentData =
+    getInfinitePayReturnData();
 
-  if (!paymentFlow) return;
-
-  const cleanUrl = window.location.pathname;
-
-  if (paymentFlow === 'success' && paymentId) {
-    setPaymentStatus('checking');
-    setPaymentMessage('Confirmando seu pagamento com o Mercado Pago...');
-
-    verifyReturnedPayment(paymentId)
-      .then((result) => {
-        setSubmissionToken(result.submissionToken);
-        setPaymentStatus('approved');
-        setPaymentMessage('Pagamento aprovado. Preencha seus dados para enviar o mapa.');
-        setShowSendModal(true);
-      })
-      .catch((error) => {
-        setPaymentStatus(error?.paymentStatus === 'pending' ? 'pending' : 'error');
-        setPaymentMessage(
-          error?.message || 'Não foi possível confirmar o pagamento agora. Tente novamente.',
-        );
-      })
-      .finally(() => {
-        window.history.replaceState({}, '', cleanUrl);
-      });
+  if (
+    !paymentData.hasPaymentReturn ||
+    paymentReturnHandledRef.current
+  ) {
     return;
   }
 
-  if (paymentFlow === 'pending') {
-    setPaymentStatus('pending');
-    setPaymentMessage(
-      'O pagamento ainda está pendente. Assim que for aprovado, volte e tente solicitar a análise novamente.',
-    );
-  } else {
-    setPaymentStatus('rejected');
-    setPaymentMessage('O pagamento não foi concluído. Você pode tentar novamente quando desejar.');
-  }
+  paymentReturnHandledRef.current = true;
 
-  window.history.replaceState({}, '', cleanUrl);
+  setPaymentStatus('checking');
+  setPaymentMessage(
+    'Confirmando seu pagamento com a InfinitePay...',
+  );
+
+  checkAnalysisPayment(paymentData)
+    .then((result) => {
+      if (
+        !result?.paid ||
+        !result?.submissionToken
+      ) {
+        setPaymentStatus('pending');
+
+        setPaymentMessage(
+          result?.message ||
+            'O pagamento ainda não foi confirmado. Aguarde alguns segundos e tente novamente.',
+        );
+
+        return;
+      }
+
+      setSubmissionToken(
+        result.submissionToken,
+      );
+
+      setPaymentStatus('approved');
+
+      setPaymentMessage(
+        'Pagamento aprovado. Preencha seus dados para enviar o mapa.',
+      );
+
+      setShowSendModal(true);
+    })
+    .catch((error) => {
+      setPaymentStatus('error');
+
+      setPaymentMessage(
+        error?.message ||
+          'Não foi possível confirmar o pagamento agora. Tente novamente.',
+      );
+    });
 }, []);
  const charactersById = useMemo(
    () => new Map(BASE_CHARACTERS.map((character) => [character.id, character])),
@@ -884,37 +898,73 @@ const handleRequestAnalysis = async () => {
     return;
   }
 
-  setPaymentStatus('checking');
-  setPaymentMessage('Verificando se já existe um pagamento aprovado...');
+  const paymentData =
+    getInfinitePayReturnData();
 
-  try {
-    const resumed = await resumeAnalysisPayment();
-    if (resumed?.submissionToken) {
-      setSubmissionToken(resumed.submissionToken);
-      setPaymentStatus('approved');
-      setPaymentMessage('Pagamento aprovado. Preencha seus dados para enviar o mapa.');
-      setShowSendModal(true);
-      return;
+  // Caso a pessoa já tenha voltado da
+  // InfinitePay, tenta confirmar novamente.
+  if (paymentData.hasPaymentReturn) {
+    setPaymentStatus('checking');
+
+    setPaymentMessage(
+      'Confirmando seu pagamento com a InfinitePay...',
+    );
+
+    try {
+      const result =
+        await checkAnalysisPayment(
+          paymentData,
+        );
+
+      if (
+        result?.paid &&
+        result?.submissionToken
+      ) {
+        setSubmissionToken(
+          result.submissionToken,
+        );
+
+        setPaymentStatus('approved');
+
+        setPaymentMessage(
+          'Pagamento aprovado. Preencha seus dados para enviar o mapa.',
+        );
+
+        setShowSendModal(true);
+      } else {
+        setPaymentStatus('pending');
+
+        setPaymentMessage(
+          result?.message ||
+            'O pagamento ainda não foi confirmado. Aguarde alguns segundos e tente novamente.',
+        );
+      }
+    } catch (error) {
+      setPaymentStatus('error');
+
+      setPaymentMessage(
+        error?.message ||
+          'Não foi possível confirmar o pagamento agora. Tente novamente.',
+      );
     }
-  } catch (error) {
-    if (error?.paymentStatus === 'pending') {
-      setPaymentStatus('pending');
-      setPaymentMessage(error.message);
-      return;
-    }
-    clearCheckoutContext();
+
+    return;
   }
 
   setPaymentStatus('creating');
-  setPaymentMessage('Abrindo o ambiente seguro do Mercado Pago...');
+
+  setPaymentMessage(
+    'Abrindo o ambiente seguro da InfinitePay...',
+  );
 
   try {
-    const result = await startAnalysisPayment();
-    window.location.assign(result.checkoutUrl);
+    await openAnalysisCheckout();
   } catch (error) {
     setPaymentStatus('error');
+
     setPaymentMessage(
-      error?.message || 'Não foi possível iniciar o pagamento. Tente novamente.',
+      error?.message ||
+        'Não foi possível iniciar o pagamento. Tente novamente.',
     );
   }
 };
@@ -923,10 +973,14 @@ const handleAnalysisSent = () => {
   setAnalysisSubmitted(true);
   setSubmissionToken('');
   setPaymentStatus('approved');
-  setPaymentMessage('Mapa enviado. A devolutiva será enviada em até 24 horas.');
-  clearCheckoutContext();
-};
 
+  setPaymentMessage(
+    'Mapa enviado. A devolutiva será enviada em até 24 horas.',
+  );
+
+  clearCheckoutStorage();
+  removePaymentParameters();
+};
 
  // --- Conclusão ---
  const handleConfirmComplete = () => {
@@ -1293,7 +1347,7 @@ const handleAnalysisSent = () => {
        onClose={() => setShowSendModal(false)}
        onCaptureImage={captureMapImage}
        submissionToken={submissionToken}
-       onSuccess={handleAnalysisSent}
+       onSubmitted={handleAnalysisSent}
      />
    </div>
  );
