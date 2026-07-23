@@ -14,14 +14,18 @@ import {
  Users,
  X,
 } from 'lucide-react';
+import SendForAnalysisModal from './SendForAnalysisModal.jsx';
+import {
+  clearCheckoutContext,
+  resumeAnalysisPayment,
+  startAnalysisPayment,
+  verifyReturnedPayment,
+} from './paymentApi.js';
 import './Mapa.css';
-
 // Chave de armazenamento do fluxo guiado + campo sistêmico.
 const STORAGE_KEY_V2 = 'colo-clareza-mapa-v2';
-
 // TODO: defina aqui o valor real da análise antes de publicar.
-const ANALYSIS_PRICE_LABEL = 'R$ XX,XX';
-
+const ANALYSIS_PRICE_LABEL = 'R$ 69,90';
 // As 5 perguntas do fluxo guiado. "role" é o texto curto usado na
 // confirmação e na etiqueta da bancada; "prompt" é a pergunta em destaque.
 const GUIDED_QUESTIONS = [
@@ -41,9 +45,7 @@ const GUIDED_QUESTIONS = [
      'Existe alguém da sua história familiar cuja trajetória lhe lembre, de alguma forma, essa situação?',
  },
 ];
-
 const CATEGORY_TABS_ORDER = ['babies', 'children', 'teens', 'adults', 'symbols'];
-
 const BASE_CHARACTERS = [
  {
    id: 'baby-alert',
@@ -75,7 +77,6 @@ const BASE_CHARACTERS = [
    clothes: '#739c82',
    background: '#ebe1c8',
  },
-
  {
    id: 'child-spontaneous',
    label: 'Criança espontânea',
@@ -116,7 +117,6 @@ const BASE_CHARACTERS = [
    clothes: '#c26f61',
    background: '#f0d8ca',
  },
-
  {
    id: 'teen-sensitive',
    label: 'Adolescente sensível',
@@ -157,7 +157,6 @@ const BASE_CHARACTERS = [
    clothes: '#a75d66',
    background: '#ead4d7',
  },
-
  {
    id: 'self',
    label: 'Eu',
@@ -268,7 +267,6 @@ const BASE_CHARACTERS = [
    clothes: '#75869a',
    background: '#d6dfe6',
  },
-
  {
    id: 'symbol-love',
    label: 'Amor',
@@ -360,7 +358,6 @@ const BASE_CHARACTERS = [
    background: '#f0dede',
  },
 ];
-
 // Bancada única com todos os personagens misturados (intercala as
 // categorias em vez de agrupá-las) — usada nas 5 perguntas do fluxo guiado.
 // As categorias continuam existindo nos dados, só não aparecem na tela.
@@ -370,23 +367,18 @@ const MIXED_BENCH = (() => {
  );
  const maxLength = Math.max(...byCategory.map((list) => list.length));
  const mixed = [];
-
  for (let index = 0; index < maxLength; index += 1) {
    byCategory.forEach((list) => {
      if (list[index]) mixed.push(list[index]);
    });
  }
-
  return mixed;
 })();
-
 function clampPercent(value, min, max) {
  return Math.max(min, Math.min(max, value));
 }
-
 function CharacterAvatar({ character, compact = false }) {
  const size = compact ? 62 : 86;
-
  if (character.kind === 'symbol') {
    return (
      <div
@@ -403,12 +395,10 @@ function CharacterAvatar({ character, compact = false }) {
      </div>
    );
  }
-
  const isBaby = character.kind === 'baby';
  const isWoman = ['woman', 'girl', 'elder-woman'].includes(character.kind);
  const isElder = ['elder-woman', 'elder-man'].includes(character.kind);
  const hasLongHair = isWoman;
-
  return (
    <svg
      className="character-avatar"
@@ -423,14 +413,12 @@ function CharacterAvatar({ character, compact = false }) {
        d={isBaby ? 'M24 100 C25 74 35 65 50 65 C65 65 75 74 76 100' : 'M18 100 C21 72 34 63 50 63 C66 63 79 72 82 100'}
        fill={character.clothes || '#9c7b6c'}
      />
-
      {hasLongHair && (
        <path
          d="M23 53 C18 17 31 8 50 8 C69 8 82 18 77 55 C73 73 64 76 50 76 C35 76 27 70 23 53Z"
          fill={character.hair || '#5a3428'}
        />
      )}
-
      {!hasLongHair && (
        <path
          d={isBaby
@@ -439,7 +427,6 @@ function CharacterAvatar({ character, compact = false }) {
          fill={character.hair || '#4b3229'}
        />
      )}
-
      <ellipse
        cx="50"
        cy={isBaby ? 46 : 43}
@@ -447,7 +434,6 @@ function CharacterAvatar({ character, compact = false }) {
        ry={isBaby ? 21 : 23}
        fill={character.skin || '#c9835e'}
      />
-
      {hasLongHair && (
        <>
          <path d="M30 44 C28 25 37 17 50 17 C63 17 73 26 71 43 C63 32 53 29 42 30 C36 31 32 36 30 44Z" fill={character.hair || '#5a3428'} />
@@ -455,7 +441,6 @@ function CharacterAvatar({ character, compact = false }) {
          <path d="M72 42 C76 58 70 70 63 75" stroke={character.hair || '#5a3428'} strokeWidth="8" strokeLinecap="round" fill="none" />
        </>
      )}
-
      {isElder && (
        <>
          <path d="M33 22 C40 12 61 12 68 22" stroke="#efefec" strokeWidth="10" strokeLinecap="round" />
@@ -464,14 +449,12 @@ function CharacterAvatar({ character, compact = false }) {
          <path d="M48 43 H52" stroke="#6e5f58" strokeWidth="2" />
        </>
      )}
-
      {!isElder && (
        <>
          <circle cx="42" cy={isBaby ? 44 : 42} r="2.2" fill="#49342d" />
          <circle cx="58" cy={isBaby ? 44 : 42} r="2.2" fill="#49342d" />
        </>
      )}
-
      <path
        d={isBaby ? 'M45 54 C48 57 52 57 55 54' : 'M43 53 C47 58 53 58 57 53'}
        stroke="#8f4c42"
@@ -479,18 +462,15 @@ function CharacterAvatar({ character, compact = false }) {
        strokeLinecap="round"
        fill="none"
      />
-
      {character.kind === 'man' && (
        <path d="M34 55 C38 68 62 68 66 55 C62 63 57 68 50 68 C43 68 38 63 34 55Z" fill={character.hair || '#4b3229'} opacity="0.9" />
      )}
-
      {isBaby && (
        <path d="M48 17 C43 11 47 6 52 9 C56 11 54 16 50 17" stroke={character.hair || '#4b3229'} strokeWidth="3" fill="none" strokeLinecap="round" />
      )}
    </svg>
  );
 }
-
 // Tela inicial: "O que você deseja olhar hoje?"
 function ThemeScreen({ theme, onChangeTheme, onContinue }) {
  return (
@@ -519,7 +499,6 @@ function ThemeScreen({ theme, onChangeTheme, onContinue }) {
    </div>
  );
 }
-
 // Tela de cada uma das 5 perguntas: bancada única + confirmação.
 function GuidedQuestionScreen({
  questionIndex,
@@ -539,7 +518,6 @@ function GuidedQuestionScreen({
      </span>
      <h1 className="guided-pergunta">{prompt}</h1>
      <p className="guided-instrucao">Toque em um personagem para escolhê-lo.</p>
-
      <div className="guided-bancada">
        {benchCharacters.map((character) => (
          <button
@@ -553,7 +531,6 @@ function GuidedQuestionScreen({
          </button>
        ))}
      </div>
-
      {pendingCharacter && (
        <div className="guided-confirmacao-fundo" role="dialog" aria-modal="true">
          <div className="guided-confirmacao">
@@ -577,22 +554,18 @@ function GuidedQuestionScreen({
    </div>
  );
 }
-
 export default function Mapa() {
  const mapRef = useRef(null);
-
  // --- Fluxo guiado ---
  const [theme, setTheme] = useState('');
  const [flowStage, setFlowStage] = useState('tema'); // 'tema' | 'perguntas' | 'campo'
  const [questionIndex, setQuestionIndex] = useState(0);
  const [answers, setAnswers] = useState([]);
  const [pendingCharacterId, setPendingCharacterId] = useState(null);
-
  // --- Campo sistêmico ---
  const [zoom, setZoom] = useState(1);
  const [showHelp, setShowHelp] = useState(false);
  const [isExporting, setIsExporting] = useState(false);
-
  // Os 5 representantes escolhidos. Cada um: { instanceId, characterId,
  // role, name, x, y, facing, inField }. inField=false enquanto ainda
  // está na bancada, esperando ser arrastado para dentro do círculo.
@@ -604,43 +577,32 @@ export default function Mapa() {
  // --- Conclusão ---
  const [mapCompleted, setMapCompleted] = useState(false);
  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
- const [showPaymentNotice, setShowPaymentNotice] = useState(false);
- const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
 
+const [showSendModal, setShowSendModal] = useState(false);
+const [paymentStatus, setPaymentStatus] = useState('idle'); // idle | creating | checking | approved | pending | rejected | error
+const [paymentMessage, setPaymentMessage] = useState('');
+const [submissionToken, setSubmissionToken] = useState('');
+const [analysisSubmitted, setAnalysisSubmitted] = useState(false);
  // Carrega tudo da chave v2.
  useEffect(() => {
    try {
      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_V2));
      if (saved) {
        if (typeof saved.theme === 'string') setTheme(saved.theme);
-
-       if (['tema', 'perguntas', 'campo'].includes(saved.flowStage)) {
-         setFlowStage(saved.flowStage);
-       }
-
-       if (typeof saved.questionIndex === 'number') {
-         setQuestionIndex(
-           Math.max(0, Math.min(GUIDED_QUESTIONS.length - 1, saved.questionIndex)),
-         );
-       }
-
+       if (saved.flowStage) setFlowStage(saved.flowStage);
+       if (typeof saved.questionIndex === 'number') setQuestionIndex(saved.questionIndex);
        if (Array.isArray(saved.answers)) setAnswers(saved.answers);
        if (Array.isArray(saved.fieldCharacters)) setFieldCharacters(saved.fieldCharacters);
        if (typeof saved.zoom === 'number') setZoom(saved.zoom);
        if (typeof saved.mapCompleted === 'boolean') setMapCompleted(saved.mapCompleted);
+       if (typeof saved.analysisSubmitted === 'boolean') setAnalysisSubmitted(saved.analysisSubmitted);
      }
    } catch {
      localStorage.removeItem(STORAGE_KEY_V2);
-   } finally {
-     setHasLoadedStorage(true);
    }
  }, []);
-
  // Salva tudo junto sempre que qualquer parte do estado muda.
- // O bloqueio inicial evita sobrescrever um progresso salvo antes da leitura terminar.
  useEffect(() => {
-   if (!hasLoadedStorage) return;
-
    localStorage.setItem(
      STORAGE_KEY_V2,
      JSON.stringify({
@@ -651,24 +613,60 @@ export default function Mapa() {
        fieldCharacters,
        zoom,
        mapCompleted,
+       analysisSubmitted,
      }),
    );
- }, [
-   hasLoadedStorage,
-   theme,
-   flowStage,
-   questionIndex,
-   answers,
-   fieldCharacters,
-   zoom,
-   mapCompleted,
- ]);
+ }, [theme, flowStage, questionIndex, answers, fieldCharacters, zoom, mapCompleted, analysisSubmitted]);
 
+// Confirma o retorno do Mercado Pago no backend antes de liberar o formulário.
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const paymentFlow = params.get('payment');
+  const paymentId = params.get('payment_id') || params.get('collection_id');
+
+  if (!paymentFlow) return;
+
+  const cleanUrl = window.location.pathname;
+
+  if (paymentFlow === 'success' && paymentId) {
+    setPaymentStatus('checking');
+    setPaymentMessage('Confirmando seu pagamento com o Mercado Pago...');
+
+    verifyReturnedPayment(paymentId)
+      .then((result) => {
+        setSubmissionToken(result.submissionToken);
+        setPaymentStatus('approved');
+        setPaymentMessage('Pagamento aprovado. Preencha seus dados para enviar o mapa.');
+        setShowSendModal(true);
+      })
+      .catch((error) => {
+        setPaymentStatus(error?.paymentStatus === 'pending' ? 'pending' : 'error');
+        setPaymentMessage(
+          error?.message || 'Não foi possível confirmar o pagamento agora. Tente novamente.',
+        );
+      })
+      .finally(() => {
+        window.history.replaceState({}, '', cleanUrl);
+      });
+    return;
+  }
+
+  if (paymentFlow === 'pending') {
+    setPaymentStatus('pending');
+    setPaymentMessage(
+      'O pagamento ainda está pendente. Assim que for aprovado, volte e tente solicitar a análise novamente.',
+    );
+  } else {
+    setPaymentStatus('rejected');
+    setPaymentMessage('O pagamento não foi concluído. Você pode tentar novamente quando desejar.');
+  }
+
+  window.history.replaceState({}, '', cleanUrl);
+}, []);
  const charactersById = useMemo(
    () => new Map(BASE_CHARACTERS.map((character) => [character.id, character])),
    [],
  );
-
  // Assim que as 5 perguntas terminam, inicializa os 5 representantes na
  // bancada (uma única vez — se já existir progresso salvo, não mexe).
  useEffect(() => {
@@ -691,18 +689,11 @@ export default function Mapa() {
      );
    }
  }, [flowStage, answers, fieldCharacters.length]);
-
  const selectedFieldCharacter = fieldCharacters.find(
    (character) => character.instanceId === selectedFieldId,
  );
-
- const allRepresentativesPositioned =
-   fieldCharacters.length === GUIDED_QUESTIONS.length &&
-   fieldCharacters.every((character) => character.inField);
-
  const screenPointToCanvas = (clientX, clientY) => {
    const rect = mapRef.current.getBoundingClientRect();
-
    return {
      x: (clientX - rect.left - rect.width / 2) / zoom + rect.width / 2,
      y: (clientY - rect.top - rect.height / 2) / zoom + rect.height / 2,
@@ -710,7 +701,6 @@ export default function Mapa() {
      height: rect.height,
    };
  };
-
  const isPointInsideCircle = (clientX, clientY) => {
    if (!mapRef.current) return false;
    const rect = mapRef.current.getBoundingClientRect();
@@ -721,20 +711,16 @@ export default function Mapa() {
    const deltaY = clientY - centerY;
    return Math.sqrt(deltaX * deltaX + deltaY * deltaY) <= radius;
  };
-
  // --- Handlers do fluxo guiado (perguntas) ---
  const handleSelectBenchCharacter = (characterId) => {
    setPendingCharacterId(characterId);
  };
-
  const handleCancelPending = () => {
    setPendingCharacterId(null);
  };
-
  const handleConfirmPending = () => {
    const character = charactersById.get(pendingCharacterId);
    if (!character) return;
-
    const currentQuestion = GUIDED_QUESTIONS[questionIndex];
    const newAnswer = {
      role: currentQuestion.role,
@@ -745,17 +731,14 @@ export default function Mapa() {
      instanceId: `${character.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
      name: character.label,
    };
-
    setAnswers((current) => [...current, newAnswer]);
    setPendingCharacterId(null);
-
    if (questionIndex + 1 < GUIDED_QUESTIONS.length) {
      setQuestionIndex((current) => current + 1);
    } else {
      setFlowStage('campo');
    }
  };
-
  // --- Handlers da bancada -> campo (arrastar para dentro do círculo) ---
  const handleBenchPointerDown = (event, item) => {
    if (mapCompleted) return;
@@ -769,23 +752,19 @@ export default function Mapa() {
      currentY: event.clientY,
    });
  };
-
  const handleBenchPointerMove = (event) => {
    setBenchDrag((current) =>
      current ? { ...current, currentX: event.clientX, currentY: event.clientY } : current,
    );
  };
-
  const handleBenchPointerUp = (event, item) => {
    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
      event.currentTarget.releasePointerCapture(event.pointerId);
    }
-
    if (isPointInsideCircle(event.clientX, event.clientY)) {
      const point = screenPointToCanvas(event.clientX, event.clientY);
      const xPercent = clampPercent((point.x / point.width) * 100, 6, 94);
      const yPercent = clampPercent((point.y / point.height) * 100, 7, 93);
-
      setFieldCharacters((current) =>
        current.map((character) =>
          character.instanceId === item.instanceId
@@ -795,38 +774,30 @@ export default function Mapa() {
      );
      setSelectedFieldId(item.instanceId);
    }
-
    setBenchDrag(null);
  };
-
  // --- Handlers de reposicionamento dentro do campo ---
  const handleFieldPointerDown = (event, character) => {
    if (mapCompleted) return;
    event.preventDefault();
    event.stopPropagation();
-
    const point = screenPointToCanvas(event.clientX, event.clientY);
    const currentX = (character.x / 100) * point.width;
    const currentY = (character.y / 100) * point.height;
-
    fieldDragMetaRef.current = {
      instanceId: character.instanceId,
      offsetX: point.x - currentX,
      offsetY: point.y - currentY,
    };
-
    event.currentTarget.setPointerCapture(event.pointerId);
    setSelectedFieldId(character.instanceId);
  };
-
  const handleFieldPointerMove = (event) => {
    const drag = fieldDragMetaRef.current;
    if (!drag) return;
-
    const point = screenPointToCanvas(event.clientX, event.clientY);
    const nextX = ((point.x - drag.offsetX) / point.width) * 100;
    const nextY = ((point.y - drag.offsetY) / point.height) * 100;
-
    setFieldCharacters((current) =>
      current.map((character) =>
        character.instanceId === drag.instanceId
@@ -839,14 +810,12 @@ export default function Mapa() {
      ),
    );
  };
-
  const handleFieldPointerUp = (event) => {
    fieldDragMetaRef.current = null;
    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
      event.currentTarget.releasePointerCapture(event.pointerId);
    }
  };
-
  const updateFieldName = (name) => {
    setFieldCharacters((current) =>
      current.map((character) =>
@@ -854,7 +823,6 @@ export default function Mapa() {
      ),
    );
  };
-
  const toggleFieldFacing = () => {
    setFieldCharacters((current) =>
      current.map((character) =>
@@ -864,25 +832,21 @@ export default function Mapa() {
      ),
    );
  };
-
  // --- Exportação (inalterada em relação ao que já funcionava) ---
  const exportMap = async (filename) => {
    if (!mapRef.current) return;
-
    try {
      setSelectedFieldId(null);
      setIsExporting(true);
      await new Promise((resolve) =>
        requestAnimationFrame(() => requestAnimationFrame(resolve)),
      );
-
      const canvas = await html2canvas(mapRef.current, {
        backgroundColor: '#fffaf4',
        scale: 2,
        useCORS: true,
        logging: false,
      });
-
      const link = document.createElement('a');
      link.download = filename;
      link.href = canvas.toDataURL('image/png');
@@ -891,22 +855,86 @@ export default function Mapa() {
      setIsExporting(false);
    }
  };
+const captureMapImage = async () => {
+  if (!mapRef.current) throw new Error('O mapa não está disponível para captura.');
+
+  setSelectedFieldId(null);
+  setIsExporting(true);
+  try {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    const canvas = await html2canvas(mapRef.current, {
+      backgroundColor: '#fffaf4',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+    return canvas.toDataURL('image/png');
+  } finally {
+    setIsExporting(false);
+  }
+};
+
+const handleRequestAnalysis = async () => {
+  if (analysisSubmitted) return;
+
+  if (submissionToken) {
+    setShowSendModal(true);
+    return;
+  }
+
+  setPaymentStatus('checking');
+  setPaymentMessage('Verificando se já existe um pagamento aprovado...');
+
+  try {
+    const resumed = await resumeAnalysisPayment();
+    if (resumed?.submissionToken) {
+      setSubmissionToken(resumed.submissionToken);
+      setPaymentStatus('approved');
+      setPaymentMessage('Pagamento aprovado. Preencha seus dados para enviar o mapa.');
+      setShowSendModal(true);
+      return;
+    }
+  } catch (error) {
+    if (error?.paymentStatus === 'pending') {
+      setPaymentStatus('pending');
+      setPaymentMessage(error.message);
+      return;
+    }
+    clearCheckoutContext();
+  }
+
+  setPaymentStatus('creating');
+  setPaymentMessage('Abrindo o ambiente seguro do Mercado Pago...');
+
+  try {
+    const result = await startAnalysisPayment();
+    window.location.assign(result.checkoutUrl);
+  } catch (error) {
+    setPaymentStatus('error');
+    setPaymentMessage(
+      error?.message || 'Não foi possível iniciar o pagamento. Tente novamente.',
+    );
+  }
+};
+
+const handleAnalysisSent = () => {
+  setAnalysisSubmitted(true);
+  setSubmissionToken('');
+  setPaymentStatus('approved');
+  setPaymentMessage('Mapa enviado. A devolutiva será enviada em até 24 horas.');
+  clearCheckoutContext();
+};
+
 
  // --- Conclusão ---
  const handleConfirmComplete = () => {
-   if (!allRepresentativesPositioned) return;
-
    setMapCompleted(true);
    setShowCompleteConfirm(false);
    setSelectedFieldId(null);
  };
-
  // --- Etapa 1: telas do fluxo guiado, antes do círculo ---
-
- if (!hasLoadedStorage) {
-   return <div className="guided-loading">Carregando seu mapa...</div>;
- }
-
  if (flowStage === 'tema') {
    return (
      <ThemeScreen
@@ -916,13 +944,11 @@ export default function Mapa() {
      />
    );
  }
-
  if (flowStage === 'perguntas') {
    const currentQuestion = GUIDED_QUESTIONS[questionIndex];
    const pendingCharacter = pendingCharacterId
      ? charactersById.get(pendingCharacterId)
      : null;
-
    return (
      <GuidedQuestionScreen
        questionIndex={questionIndex}
@@ -937,30 +963,24 @@ export default function Mapa() {
      />
    );
  }
-
  // --- flowStage === 'campo': campo sistêmico restrito (Etapa 2) ---
-
  const bench = fieldCharacters.filter((character) => !character.inField);
  const placedInField = fieldCharacters.filter((character) => character.inField);
-
  return (
    <div className="systemic-page">
      <aside className="systemic-nav" aria-label="Navegação lateral">
        <Link to="/" className="nav-brand" aria-label="Voltar para o início">
          <span className="brand-mark">C</span>
        </Link>
-
        <Link to="/" className="systemic-nav-item">
          <Home size={22} />
          <span>Início</span>
        </Link>
-
        <button type="button" className="systemic-nav-item active">
          <Users size={22} />
          <span>Campo</span>
        </button>
      </aside>
-
      <main className="systemic-workspace">
        <header className="systemic-topbar">
          <div>
@@ -972,11 +992,9 @@ export default function Mapa() {
              </span>
            </Link>
          </div>
-
          <p className="systemic-motto">
            Cada lugar revela uma história. <span>♥</span>
          </p>
-
          <button
            type="button"
            className="soft-button"
@@ -986,7 +1004,6 @@ export default function Mapa() {
            Como usar
          </button>
        </header>
-
        <div className="systemic-layout systemic-layout--campo">
          <section className="map-column">
            <div className="map-instruction">
@@ -996,7 +1013,6 @@ export default function Mapa() {
                <span>Arraste os representantes da bancada para posicioná-los no campo</span>
              </div>
            </div>
-
            <div
              ref={mapRef}
              className={`systemic-map ${isExporting ? 'is-exporting' : ''}`}
@@ -1011,12 +1027,10 @@ export default function Mapa() {
              <div className="map-watercolor map-watercolor-two" />
              <div className="map-watercolor map-watercolor-three" />
              <div className="map-sacred-lines" />
-
              <div className="systemic-canvas">
                {placedInField.map((placedCharacter) => {
                  const character = charactersById.get(placedCharacter.characterId);
                  if (!character) return null;
-
                  return (
                    <button
                      key={placedCharacter.instanceId}
@@ -1041,7 +1055,6 @@ export default function Mapa() {
                  );
                })}
              </div>
-
              {placedInField.length === 0 && (
                <div className="empty-map-message">
                  <Users size={28} />
@@ -1050,7 +1063,6 @@ export default function Mapa() {
                </div>
              )}
            </div>
-
            {!mapCompleted && bench.length > 0 && (
              <div className="field-bench" aria-label="Representantes para posicionar">
                {bench.map((character) => {
@@ -1064,7 +1076,6 @@ export default function Mapa() {
                        zIndex: 30,
                      }
                    : undefined;
-
                  return (
                    <button
                      key={character.instanceId}
@@ -1087,14 +1098,12 @@ export default function Mapa() {
                })}
              </div>
            )}
-
            <div className="map-bottom-bar">
              <p>
                {mapCompleted
                  ? 'Seu mapa está concluído.'
                  : 'Arraste os representantes e posicione onde desejar'}
              </p>
-
              <div className="zoom-controls" aria-label="Controles de zoom">
                <button
                  type="button"
@@ -1118,7 +1127,6 @@ export default function Mapa() {
              </div>
            </div>
          </section>
-
          <aside className="actions-panel">
            {!mapCompleted && (
              <div className="action-buttons action-buttons--campo">
@@ -1130,7 +1138,6 @@ export default function Mapa() {
                  <Download size={23} />
                  <span>Salvar imagem</span>
                </button>
-
                <button
                  type="button"
                  className="action-button sand"
@@ -1139,30 +1146,16 @@ export default function Mapa() {
                  <Download size={23} />
                  <span>Exportar mapa</span>
                </button>
-
                <button
                  type="button"
                  className="action-button primary"
                  onClick={() => setShowCompleteConfirm(true)}
-                 disabled={!allRepresentativesPositioned}
-                 title={
-                   allRepresentativesPositioned
-                     ? 'Concluir o mapa'
-                     : 'Posicione os cinco representantes no campo antes de concluir'
-                 }
                >
                  <CheckCircle2 size={23} />
                  <span>Concluir meu mapa</span>
                </button>
-
-               {!allRepresentativesPositioned && (
-                 <p className="field-completion-hint">
-                   Posicione os cinco representantes dentro do campo para liberar a conclusão.
-                 </p>
-               )}
              </div>
            )}
-
            {!mapCompleted && selectedFieldCharacter && (
              <section className="selected-editor">
                <div className="selected-editor-title">
@@ -1175,7 +1168,6 @@ export default function Mapa() {
                    <X size={17} />
                  </button>
                </div>
-
                <label htmlFor="selected-field-name">Nome no mapa</label>
                <div className="name-editor">
                  <Pencil size={17} />
@@ -1185,14 +1177,12 @@ export default function Mapa() {
                    onChange={(event) => updateFieldName(event.target.value)}
                  />
                </div>
-
                <button type="button" className="flip-selected" onClick={toggleFieldFacing}>
                  <FlipHorizontal size={17} />
                  Virar para {selectedFieldCharacter.facing === 'left' ? 'a direita' : 'a esquerda'}
                </button>
              </section>
            )}
-
            {!mapCompleted && !selectedFieldCharacter && (
              <div className="map-tip">
                <span>♥</span>
@@ -1200,7 +1190,6 @@ export default function Mapa() {
                <p>Selecione um representante para editar o nome ou espelhá-lo.</p>
              </div>
            )}
-
            {mapCompleted && (
              <section className="completion-card">
                <h2>Seu mapa está pronto.</h2>
@@ -1213,36 +1202,51 @@ export default function Mapa() {
                <p>
                  Você receberá sua devolutiva em até 24 horas pelo WhatsApp ou e-mail informado.
                </p>
-
-               <button
-                 type="button"
-                 className="completion-card__download"
-                 onClick={() => exportMap('mapa-sistemico-concluido.png')}
-               >
-                 <Download size={18} />
-                 Baixar meu mapa
-               </button>
-
                <p className="completion-card__preco">
                  Valor da análise: {ANALYSIS_PRICE_LABEL}
                </p>
-               <button
-                 type="button"
-                 className="botao botao--primario"
-                 onClick={() => setShowPaymentNotice(true)}
-               >
-                 Solicitar análise
-                 <ArrowRight size={17} strokeWidth={2} />
-               </button>
-               {showPaymentNotice && (
-                 <p className="completion-card__aviso">
-                   O pagamento e o envio para análise serão habilitados na próxima etapa desta
-                   implementação.
+
+               <div className="completion-card__actions">
+                 <button
+                   type="button"
+                   className="botao botao--secundario"
+                   onClick={() => exportMap('mapa-sistemico.png')}
+                 >
+                   <Download size={17} strokeWidth={2} />
+                   Baixar meu mapa
+                 </button>
+
+                 {!analysisSubmitted && (
+                   <button
+                     type="button"
+                     className="botao botao--primario"
+                     onClick={handleRequestAnalysis}
+                     disabled={paymentStatus === 'creating' || paymentStatus === 'checking'}
+                   >
+                     {paymentStatus === 'creating' || paymentStatus === 'checking'
+                       ? 'Aguarde...'
+                       : submissionToken
+                         ? 'Preencher dados e enviar'
+                         : 'Solicitar análise'}
+                     <ArrowRight size={17} strokeWidth={2} />
+                   </button>
+                 )}
+               </div>
+
+               {paymentMessage && (
+                 <p className={`completion-card__payment-status completion-card__payment-status--${paymentStatus}`}>
+                   {paymentMessage}
                  </p>
+               )}
+
+               {analysisSubmitted && (
+                 <div className="completion-card__sent">
+                   <CheckCircle2 size={22} />
+                   <span>Mapa enviado para análise. A devolutiva será enviada em até 24 horas.</span>
+                 </div>
                )}
              </section>
            )}
-
            {showHelp && (
              <div className="help-card">
                <button type="button" onClick={() => setShowHelp(false)} aria-label="Fechar ajuda">
@@ -1261,7 +1265,6 @@ export default function Mapa() {
          </aside>
        </div>
      </main>
-
      {showCompleteConfirm && (
        <div className="guided-confirmacao-fundo" role="dialog" aria-modal="true">
          <div className="guided-confirmacao">
@@ -1284,6 +1287,14 @@ export default function Mapa() {
          </div>
        </div>
      )}
+
+     <SendForAnalysisModal
+       open={showSendModal}
+       onClose={() => setShowSendModal(false)}
+       onCaptureImage={captureMapImage}
+       submissionToken={submissionToken}
+       onSuccess={handleAnalysisSent}
+     />
    </div>
  );
 }
