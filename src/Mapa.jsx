@@ -526,9 +526,9 @@ function GuidedQuestionScreen({
            key={character.id}
            className="guided-bancada__item"
            onClick={() => onSelectCharacter(character.id)}
+           aria-label="Selecionar este personagem"
          >
            <CharacterAvatar character={character} compact />
-           <span>{character.label}</span>
          </button>
        ))}
      </div>
@@ -743,7 +743,7 @@ useEffect(() => {
      // instanceId próprio: o mesmo personagem pode ser escolhido de novo
      // em outra pergunta e vira uma instância independente.
      instanceId: `${character.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-     name: character.label,
+     name: '',
    };
    setAnswers((current) => [...current, newAnswer]);
    setPendingCharacterId(null);
@@ -1101,10 +1101,22 @@ const handleAnalysisSent = () => {
                      onPointerMove={handleFieldPointerMove}
                      onPointerUp={handleFieldPointerUp}
                      onPointerCancel={handleFieldPointerUp}
-                     aria-label={`${placedCharacter.name} (${placedCharacter.role}). Arraste para mover.`}
+                     aria-label={`${
+                      placedCharacter.name.trim() ||
+                      'Personagem sem nome'
+                    } (${placedCharacter.role}). Arraste para mover.`}
                    >
                      <CharacterAvatar character={character} />
-                     <span className="placed-character-name">{placedCharacter.name}</span>
+                     <span
+  className={`placed-character-name ${
+    placedCharacter.name.trim()
+      ? ''
+      : 'placed-character-name--empty'
+  }`}
+>
+  {placedCharacter.name.trim() ||
+    'Adicionar nome'}
+</span>
                    </button>
                  );
                })}
@@ -1145,7 +1157,6 @@ const handleAnalysisSent = () => {
                        character={charactersById.get(character.characterId)}
                        compact
                      />
-                     <span className="field-bench__nome">{character.name}</span>
                      <span className="field-bench__papel">{character.role}</span>
                    </button>
                  );
@@ -1226,10 +1237,13 @@ const handleAnalysisSent = () => {
                <div className="name-editor">
                  <Pencil size={17} />
                  <input
-                   id="selected-field-name"
-                   value={selectedFieldCharacter.name}
-                   onChange={(event) => updateFieldName(event.target.value)}
-                 />
+  id="selected-field-name"
+  value={selectedFieldCharacter.name}
+  placeholder="Digite um nome"
+  onChange={(event) =>
+    updateFieldName(event.target.value)
+  }
+/>
                </div>
                <button type="button" className="flip-selected" onClick={toggleFieldFacing}>
                  <FlipHorizontal size={17} />

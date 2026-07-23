@@ -1288,5 +1288,19 @@
    background: #e2eee2;
    border-radius: 12px;
  }
- 
+ .placed-character-name--empty {
+  color: #8b776b;
+  font-size: 0.75rem;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.guided-bancada__item {
+  min-height: 92px;
+}
+
+.guided-bancada__item .character-avatar,
+.guided-bancada__item .avatar-shell {
+  margin: auto;
+}
  
