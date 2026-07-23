@@ -26,7 +26,7 @@ import './Mapa.css';
 // Chave de armazenamento do fluxo guiado + campo sistêmico.
 const STORAGE_KEY_V2 = 'colo-clareza-mapa-v2';
 // TODO: defina aqui o valor real da análise antes de publicar.
-const ANALYSIS_PRICE_LABEL = 'R$ 69,90';
+const ANALYSIS_PRICE_LABEL = 'R$ 01,00';
 // As 5 perguntas do fluxo guiado. "role" é o texto curto usado na
 // confirmação e na etiqueta da bancada; "prompt" é a pergunta em destaque.
 const GUIDED_QUESTIONS = [
