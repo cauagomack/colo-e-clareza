@@ -61,7 +61,10 @@ export default async function handler(req, res) {
     };
 
     const checkout =
-  await createInfinitePayCheckout();
+  await createInfinitePayCheckout({
+    orderNsu,
+    redirectUrl: redirectUrl.toString(),
+  });
   
     return sendJson(res, 200, {
       success: true,

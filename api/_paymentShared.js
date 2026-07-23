@@ -170,9 +170,14 @@ async function postInfinitePay(path, body) {
   }
 }
 
-export async function createInfinitePayCheckout() {
+export async function createInfinitePayCheckout({
+  orderNsu,
+  redirectUrl,
+}) {
   const payload = {
     handle: getInfinitePayHandle(),
+    redirect_url: redirectUrl,
+    order_nsu: orderNsu,
     items: [
       {
         quantity: 1,
