@@ -477,3 +477,29 @@
       padding: 22px 18px;
     }
   }
+  .admin-status-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .admin-status-select {
+    border: 0;
+    outline: 0;
+    cursor: pointer;
+    font: inherit;
+  }
+  
+  .admin-status-select:disabled {
+    cursor: wait;
+    opacity: 0.7;
+  }
+  
+  .admin-status-error {
+    max-width: 1200px;
+    margin: 0 auto 20px;
+    padding: 12px 15px;
+    border-radius: 12px;
+    color: #8b3a33;
+    background: #f7dedb;
+  }

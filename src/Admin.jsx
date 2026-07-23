@@ -26,6 +26,7 @@ import {
     isAdminLoggedIn,
     loginAdmin,
     logoutAdmin,
+    updateSubmissionStatus,
   } from './adminApi.js';
   
   import './Admin.css';
@@ -88,6 +89,12 @@ import {
   
     const [imageErrors, setImageErrors] =
       useState({});
+
+      const [updatingRowId, setUpdatingRowId] =
+  useState(null);
+
+const [statusError, setStatusError] =
+  useState('');
   
     const loadSubmissions = async () => {
       setLoadStatus('loading');
@@ -147,7 +154,38 @@ import {
           },
         );
       }, [submissions, searchText]);
-  
+  const handleStatusChange = async (
+  rowId,
+  newStatus,
+) => {
+  setUpdatingRowId(rowId);
+  setStatusError('');
+
+  try {
+    await updateSubmissionStatus(
+      rowId,
+      newStatus,
+    );
+
+    setSubmissions((current) =>
+      current.map((submission) =>
+        submission.rowId === rowId
+          ? {
+              ...submission,
+              status: newStatus,
+            }
+          : submission,
+      ),
+    );
+  } catch (error) {
+    setStatusError(
+      error?.message ||
+        'Não foi possível alterar o status.',
+    );
+  } finally {
+    setUpdatingRowId(null);
+  }
+};
     const handleLogin = async (event) => {
       event.preventDefault();
   
@@ -342,6 +380,12 @@ import {
         <section className="admin-toolbar">
           <div className="admin-search">
             <Search size={19} />
+
+            {statusError && (
+  <p className="admin-status-error">
+    {statusError}
+  </p>
+)}
   
             <input
               type="search"
@@ -504,17 +548,44 @@ import {
                             </h2>
                           </div>
   
-                          <span
-                            className={`admin-status admin-status--${String(
-                              submission.status ||
-                                'novo',
-                            )
-                              .toLowerCase()
-                              .replace(/\s+/g, '-')}`}
-                          >
-                            {submission.status ||
-                              'Novo'}
-                          </span>
+                          <div className="admin-status-control">
+  <select
+    value={submission.status || 'Novo'}
+    onChange={(event) =>
+      handleStatusChange(
+        submission.rowId,
+        event.target.value,
+      )
+    }
+    disabled={
+      updatingRowId === submission.rowId
+    }
+    className={`admin-status admin-status-select admin-status--${String(
+      submission.status || 'novo',
+    )
+      .toLowerCase()
+      .replace(/\s+/g, '-')}`}
+    aria-label={`Alterar status de ${submission.name}`}
+  >
+    <option value="Novo">Novo</option>
+
+    <option value="Em análise">
+      Em análise
+    </option>
+
+    <option value="Concluído">
+      Concluído
+    </option>
+  </select>
+
+  {updatingRowId ===
+    submission.rowId && (
+    <Loader2
+      size={17}
+      className="admin-spinner"
+    />
+  )}
+</div>
                         </div>
   
                         <dl className="admin-details">

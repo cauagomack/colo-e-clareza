@@ -84,3 +84,32 @@ export async function getAdminSubmissions() {
   
     return readResponse(response);
   }
+  export async function updateSubmissionStatus(
+    rowId,
+    status,
+  ) {
+    const token = getAdminToken();
+  
+    if (!token) {
+      throw new Error(
+        'Sua sessão expirou. Entre novamente.',
+      );
+    }
+  
+    const response = await fetch(
+      '/api/admin-update-status',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          rowId,
+          status,
+        }),
+      },
+    );
+  
+    return readResponse(response);
+  }
