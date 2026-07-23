@@ -46,15 +46,8 @@ export default async function handler(req, res) {
       'return',
     );
 
-    redirectUrl.searchParams.set(
-      'checkout_token',
-      checkoutToken,
-    );
 
-    const webhookUrl = new URL(
-      '/api/infinitepay-webhook',
-      SITE_URL,
-    );
+    
 
     const body =
       req.body && typeof req.body === 'object'
@@ -68,11 +61,10 @@ export default async function handler(req, res) {
     };
 
     const checkout = await createInfinitePayCheckout({
-      orderNsu,
-      redirectUrl: redirectUrl.toString(),
-      webhookUrl: webhookUrl.toString(),
-      customer,
-    });
+        orderNsu,
+        redirectUrl: redirectUrl.toString(),
+        customer,
+      });
 
     return sendJson(res, 200, {
       success: true,

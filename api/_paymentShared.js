@@ -173,13 +173,11 @@ async function postInfinitePay(path, body) {
 export async function createInfinitePayCheckout({
   orderNsu,
   redirectUrl,
-  webhookUrl,
   customer = null,
 }) {
   const payload = {
     handle: getInfinitePayHandle(),
     redirect_url: redirectUrl,
-    webhook_url: webhookUrl,
     order_nsu: orderNsu,
     items: [
       {
