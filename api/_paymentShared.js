@@ -170,15 +170,9 @@ async function postInfinitePay(path, body) {
   }
 }
 
-export async function createInfinitePayCheckout({
-  orderNsu,
-  redirectUrl,
-  customer = null,
-}) {
+export async function createInfinitePayCheckout() {
   const payload = {
     handle: getInfinitePayHandle(),
-    redirect_url: redirectUrl,
-    order_nsu: orderNsu,
     items: [
       {
         quantity: 1,
@@ -188,32 +182,6 @@ export async function createInfinitePayCheckout({
       },
     ],
   };
-
-  if (customer) {
-    const customerData = {};
-
-    if (customer.name) {
-      customerData.name = String(
-        customer.name,
-      ).trim();
-    }
-
-    if (customer.email) {
-      customerData.email = String(
-        customer.email,
-      ).trim();
-    }
-
-    if (customer.phoneNumber) {
-      customerData.phone_number = String(
-        customer.phoneNumber,
-      ).trim();
-    }
-
-    if (Object.keys(customerData).length > 0) {
-      payload.customer = customerData;
-    }
-  }
 
   const result = await postInfinitePay(
     'links',

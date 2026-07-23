@@ -60,12 +60,9 @@ export default async function handler(req, res) {
       phoneNumber: body.phoneNumber || '',
     };
 
-    const checkout = await createInfinitePayCheckout({
-        orderNsu,
-        redirectUrl: redirectUrl.toString(),
-        customer,
-      });
-
+    const checkout =
+  await createInfinitePayCheckout();
+  
     return sendJson(res, 200, {
       success: true,
       checkoutUrl: checkout.url,
