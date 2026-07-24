@@ -1356,13 +1356,27 @@ const handleAnalysisSent = () => {
        </div>
      )}
 
-     <SendForAnalysisModal
-       open={showSendModal}
-       onClose={() => setShowSendModal(false)}
-       onCaptureImage={captureMapImage}
-       submissionToken={submissionToken}
-       onSubmitted={handleAnalysisSent}
-     />
+<SendForAnalysisModal
+  open={showSendModal}
+  onClose={() =>
+    setShowSendModal(false)
+  }
+  onCaptureImage={captureMapImage}
+  submissionToken={submissionToken}
+  theme={theme.trim()}
+  representatives={fieldCharacters.map(
+    (character) => ({
+      role: character.role,
+      name: character.name.trim(),
+      characterId: character.characterId,
+      inField: character.inField,
+      x: character.x,
+      y: character.y,
+      facing: character.facing,
+    }),
+  )}
+  onSubmitted={handleAnalysisSent}
+/>
    </div>
  );
 }

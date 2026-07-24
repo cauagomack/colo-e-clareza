@@ -6,6 +6,8 @@ import {
   
   import {
     CalendarDays,
+    CircleDot,
+UsersRound,
     CreditCard,
     ExternalLink,
     Eye,
@@ -137,14 +139,29 @@ const [statusError, setStatusError] =
   
         return submissions.filter(
           (submission) => {
-            const searchableText = [
-              submission.name,
-              submission.contact,
-              submission.message,
-              submission.status,
-              submission.paymentId,
-              submission.externalReference,
-            ]
+            const representativeText = Array.isArray(
+                submission.representatives,
+              )
+                ? submission.representatives
+                    .map((representative) =>
+                      [
+                        representative.name,
+                        representative.role,
+                      ].join(' '),
+                    )
+                    .join(' ')
+                : '';
+              
+              const searchableText = [
+                submission.name,
+                submission.contact,
+                submission.message,
+                submission.theme,
+                representativeText,
+                submission.status,
+                submission.paymentId,
+                submission.externalReference,
+              ]
               .join(' ')
               .toLowerCase();
   
@@ -608,6 +625,59 @@ const [statusError, setStatusError] =
                               />
                               Mensagem
                             </dt>
+                            <div>
+  <dt>
+    <CircleDot size={16} />
+    Tema observado
+  </dt>
+
+  <dd>
+    {submission.theme ||
+      'Tema não informado neste envio.'}
+  </dd>
+</div>
+
+<div>
+  <dt>
+    <UsersRound size={16} />
+    Representantes
+  </dt>
+
+  <dd>
+    {Array.isArray(
+      submission.representatives,
+    ) &&
+    submission.representatives.length > 0 ? (
+      <ul className="admin-representatives-list">
+        {submission.representatives.map(
+          (representative, index) => (
+            <li
+              key={`${representative.characterId}-${index}`}
+            >
+              <strong>
+                {representative.name ||
+                  'Sem nome'}
+              </strong>
+
+              <span>
+                {representative.role ||
+                  'Papel não informado'}
+              </span>
+
+              <small>
+                {representative.inField
+                  ? 'Posicionado no campo'
+                  : 'Não posicionado no campo'}
+              </small>
+            </li>
+          ),
+        )}
+      </ul>
+    ) : (
+      'Nenhum representante registrado neste envio.'
+    )}
+  </dd>
+</div>
   
                             <dd>
                               {submission.message ||

@@ -54,6 +54,8 @@ export default function SendForAnalysisModal({
   onClose,
   onCaptureImage,
   submissionToken,
+  theme,
+  representatives,
   onSubmitted,
 }) {
   const [fields, setFields] =
@@ -218,22 +220,29 @@ export default function SendForAnalysisModal({
 
           body: JSON.stringify({
             action: 'submitMap',
-
+          
             submissionToken,
-
+          
             name: fields.name.trim(),
-
+          
             contact:
               fields.contact.trim(),
-
+          
             message:
               fields.message.trim(),
-
+          
+            theme: String(theme || '').trim(),
+          
+            representatives:
+              Array.isArray(representatives)
+                ? representatives
+                : [],
+          
             imageBase64: imageDataUrl,
-
+          
             authorized:
               fields.authorized,
-
+          
             honeypot:
               fields.website.trim(),
           }),
